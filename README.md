@@ -20,40 +20,35 @@ else count <= count;                // holds present value
 
 ## Design / RTL Program
 
-// gedit shift_reg.v
+
+## Testbench Program
+// gedit tb7.v
  
-module shift_reg (
-    input  wire       clk,   // clock
-    input  wire       rst,   // asynchronous active-high reset
-    input  wire       sin,   // serial input
-    output wire       sout,  // serial output (MSB, about to shift out)
-    output reg  [3:0] Q      // parallel output
+module tb7;
+    reg  clk, rst, en;
+    wire [3:0] count;
+ 
+    // Instantiate the up-counter
+    up_counter uut (
+        .clk(clk),module up_counter (
+    input  wire       clk,    // clock
+    input  wire       rst,    // asynchronous active-high reset
+    input  wire       en,     // count enable
+    output reg  [3:0] count   // 4-bit count output
 );
     always @(posedge clk or posedge rst) begin
         if (rst)
-            Q <= 4'b0000;
+            count <= 4'b0000;
+        else if (en)
+            count <= count + 1'b1;   // increment, wraps 1111 -> 0000
         else
-            Q <= {Q[2:0], sin};   // shift left, sin enters at LSB
+            count <= count;          // hold
     end
- 
-    assign sout = Q[3];
 endmodule
 
-## Testbench Program
-gedit tb6.v
- 
-module tb6;
-    reg  clk, rst, sin;
-    wire sout;
-    wire [3:0] Q;
- 
-    // Instantiate the shift register
-    shift_reg uut (
-        .clk(clk),
         .rst(rst),
-        .sin(sin),
-        .sout(sout),
-        .Q(Q)
+        .en(en),
+        .count(count)
     );
  
     // ---- Clock generation: 10 time-unit period ----
@@ -62,30 +57,34 @@ module tb6;
  
     initial begin
         // ---- VCD dump setup ----
-        $dumpfile("shift_reg.vcd");   // name of the VCD file to be generated
-        $dumpvars(0, tb6);              // dump all signals in this testbench hierarchy
+        $dumpfile("up_counter.vcd");   // name of the VCD file to be generated
+        $dumpvars(0, tb7);               // dump all signals in this testbench hierarchy
  
-        $monitor("Time=%0t rst=%b clk=%b sin=%b | Q=%b sout=%b",
-                  $time, rst, clk, sin, Q, sout);
+        $monitor("Time=%0t rst=%b clk=%b en=%b | count=%b (%0d)",
+                  $time, rst, clk, en, count, count);
  
         // ---- Apply asynchronous reset ----
-        rst = 1; sin = 0;
+        rst = 1; en = 0;
         #7  rst = 0;
  
-        // ---- Serially shift in the bit pattern 1 0 1 1 ----
-        @(negedge clk); sin = 1;
-        @(negedge clk); sin = 0;
-        @(negedge clk); sin = 1;
-        @(negedge clk); sin = 1;
+        // ---- Disable counting: count should hold at 0 ----
+        @(negedge clk);
+        @(negedge clk);
  
-        // ---- Hold sin = 0 and observe the pattern shift out ----
-        @(negedge clk); sin = 0;
+        // ---- Enable counting and let it run past overflow ----
+        en = 1;
+        repeat (18) @(negedge clk);   // 18 clocks: 4-bit count wraps around once
+ 
+        // ---- Disable again and confirm the count holds ----
+        en = 0;
         @(negedge clk);
         @(negedge clk);
  
         // ---- Apply reset again mid-simulation ----
-        @(negedge clk); rst = 1;
-        @(negedge clk); rst = 0; sin = 1;
+        rst = 1;
+        @(negedge clk);
+        rst = 0; en = 1;
+        repeat (3) @(negedge clk);
  
         #20 $finish;
     end
@@ -154,7 +153,7 @@ count(next) = count + 1   (when en = 1), wrapping from 1111 to 0000
 The design was compiled and simulated using Synopsys VCS, and the functionality was verified using DVE waveform analysis, matching the expected state transition table.
 
 ## Output
-<img width="1600" height="846" alt="screen shot2026-11-23 at 10 09 41 PM" src="https://github.com/user-attachments/assets/3047365d-5321-47c0-a52e-8ac384697c40" />
+<img width="1600" height="691" alt=" Image 2026-11-23 at 10 19 30 PM" src="https://github.com/user-attachments/assets/8cbc0e63-4e08-4ddc-aa98-8495a487f082" />
 
 
 
